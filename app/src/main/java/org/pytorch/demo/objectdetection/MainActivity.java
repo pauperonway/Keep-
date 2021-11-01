@@ -25,6 +25,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -75,8 +76,6 @@ public class MainActivity extends AppCompatActivity implements Runnable {
 //        System.loadLibrary("opencv_java");
         System.loadLibrary("opencv_java3");
     }
-
-    public static boolean isOpenCVInit = false;
 
     public static String assetFilePath(Context context, String assetName) throws IOException {
         File file = new File(context.getFilesDir(), assetName);
@@ -215,6 +214,9 @@ public class MainActivity extends AppCompatActivity implements Runnable {
             Log.e("Object Detection", "Error reading assets", e);
             finish();
         }
+
+        boolean flag = OpenCVLoader.initDebug();
+        Log.i("##############gb init opencv :", String.valueOf(flag));
     }
 
     @Override
@@ -280,52 +282,29 @@ public class MainActivity extends AppCompatActivity implements Runnable {
     @Override
     public void run() {
         // gb add read mp4 begin
-        OpenCVLoader.initDebug();
         String mp4_path = null;
         try {
-            mp4_path = MainActivity.assetFilePath(getApplicationContext(), "shooting-model.mp4");
+            mp4_path = MainActivity.assetFilePath(getApplicationContext(), "shooting-model.avi");
+            Log.i("##############gb", mp4_path);
         } catch (IOException e) {
-            Log.e("Object Detection", "Error reading mp4.", e);
+            Log.e("##############gb", "Error reading mp4.", e);
         }
-        //String modelPath = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "mnn" + File.separator + "cpm.mnn";
-        //Log.i("##############gb333", modelPath);
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        Log.i("##############gb333", mp4_path);
-        retriever.setDataSource(mp4_path);
-        // 取得视频的长度(单位为毫秒)
-        String time = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
-        // 取得视频的长度(单位为毫秒)
-        int ms = Integer.valueOf(time);
-        Log.i("##############gb ms: ", String.valueOf(ms));
-        // 得到每一秒时刻的bitmap比如第一秒,第二秒
-        for (int m = 1; m <= ms; m+=33) {
-            Log.i("##############gb m:", String.valueOf(m));
-            Bitmap bitmap = retriever.getFrameAtTime(m * 1000, MediaMetadataRetriever.OPTION_CLOSEST);
-            //Bitmap bitmap = null;
-            //try {
-            //    bitmap = BitmapFactory.decodeStream(getAssets().open(mTestImages[mImageIndex]));
-            //} catch (IOException e) {
-            //    Log.e("Object Detection", "Error reading assets", e);
-            //    finish();
-            //}
-            Log.i("##############gb m:", "1111111111111111111111111");
-            Log.i("##############gb:", String.valueOf(bitmap.getWidth()));
+        VideoCapture video = new VideoCapture(mp4_path);
+        Mat frame = new Mat();
+        while(video.read(frame)) {
+            Bitmap bitmap = Bitmap.createBitmap(frame.cols(),frame.rows(),Bitmap.Config.ARGB_8888);
+            org.opencv.android.Utils.matToBitmap(frame, bitmap);
             Bitmap resizedBitmap = Bitmap.createScaledBitmap(bitmap, PrePostProcessor.mInputWidth, PrePostProcessor.mInputHeight, true);
-            Log.i("##############gb","222222222222222222222222");
             final Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(resizedBitmap, PrePostProcessor.NO_MEAN_RGB, PrePostProcessor.NO_STD_RGB);
-            Log.i("##############gb","3333333333333333333333333");
             final Tensor outputTensor = mModule.forward(IValue.from(inputTensor)).toTensor();
-            //final Tensor outputTensor = outputTuple[0].toTensor();
             long[] in_size = inputTensor.shape();
             long[] out_size = outputTensor.shape();
             Log.i("##############gb out_size 0#######", String.valueOf(out_size[0]));
             Log.i("##############gb out_size 1#######", String.valueOf(out_size[1]));
             Log.i("##############gb out_size 2#######", String.valueOf(out_size[2]));
             Log.i("##############gb out_size 3#######", String.valueOf(out_size[3]));
-            Log.i("##############gb", String.valueOf(bitmap.getHeight()));
             Mat res_mat = new Mat(resizedBitmap.getHeight(), resizedBitmap.getWidth(), CvType.CV_8UC3);
             org.opencv.android.Utils.bitmapToMat(resizedBitmap, res_mat);
-            Imgproc.cvtColor(res_mat,res_mat,Imgproc.COLOR_RGB2BGR);
             String im_path = null;
             try {
                 im_path = MainActivity.assetFilePath(getApplicationContext(), "test.jpg");
@@ -463,10 +442,8 @@ public class MainActivity extends AppCompatActivity implements Runnable {
                         new Point(mPrintPointArray[0][16], mPrintPointArray[1][16]), new Scalar(0, 0, 255), 2);
             }
             Imgcodecs.imwrite(im_path, res_mat);
-
         }
         // gb add read mp4 end
-
     }
 
     private float get(int x, int y, float[] arr) {
